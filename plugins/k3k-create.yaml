@@ -1,0 +1,56 @@
+plugins:
+  create-k3k:
+    shortCut: Shift-C
+    confirm: false
+    description: "K3K Create"
+    scopes:
+      - clusters.k3k.io
+    command: bash
+    background: false
+    args:
+      - -c
+      - |
+        TEMP_YAML="/tmp/k3k-create-$(date +%s).yaml"
+        cat <<EOF > "$TEMP_YAML"
+        apiVersion: k3k.io/v1beta1
+        kind: Cluster
+        metadata:
+          name: testcluster
+          namespace: test-x
+        spec:
+          servers: 1
+          agents: 0
+          mode: virtual
+          persistence:
+            storageRequestSize: 2G
+            type: dynamic
+          sync:
+            configMaps:
+              enabled: true
+            ingresses:
+              enabled: false
+            persistentVolumeClaims:
+              enabled: true
+            priorityClasses:
+              enabled: false
+            secrets:
+              enabled: true
+            services:
+              enabled: true
+        EOF
+
+        ${EDITOR:-vim} "$TEMP_YAML"
+
+        if [ -f "$TEMP_YAML" ]; then
+          echo "Applying cluster spec..."
+          kubectl apply -f "$TEMP_YAML"
+          
+          # Optional: Clean up
+          rm "$TEMP_YAML"
+          
+          echo "Cluster creation request sent."
+          # Pause briefly so user sees the output
+          sleep 1
+        else
+          echo "Creation cancelled."
+        fi

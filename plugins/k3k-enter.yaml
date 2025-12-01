@@ -1,0 +1,40 @@
+plugins:
+  enter-k3k:
+    shortCut: Shift-K
+    confirm: false
+    description: "K3K Enter"
+    scopes:
+      - clusters.k3k.io
+    command: bash
+    background: false
+    args:
+      - -c
+      - |
+        CLUSTER_NAME=$NAME
+        NAMESPACE=$NAMESPACE
+        TEMP_KUBECONFIG="/tmp/k3k-${CLUSTER_NAME}-${NAMESPACE}.kubeconfig"
+
+        LOCAL_PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')
+
+        kubectl get secret "k3k-${CLUSTER_NAME}-kubeconfig" \
+          -n "$NAMESPACE" \
+          -o jsonpath="{.data.kubeconfig\.yaml}" | base64 -d > "$TEMP_KUBECONFIG"
+
+        if [ ! -s "$TEMP_KUBECONFIG" ]; then
+          echo "Error: Failed to extract kubeconfig."
+          read -p "Press Enter to exit..."
+          exit 1
+        fi
+        
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+          sed -i '' "s|server: .*|server: https://127.0.0.1:${LOCAL_PORT}|" "$TEMP_KUBECONFIG"
+        else
+          sed -i "s|server: .*|server: https://127.0.0.1:${LOCAL_PORT}|" "$TEMP_KUBECONFIG"
+        fi
+
+        kubectl port-forward "svc/k3k-${CLUSTER_NAME}-service" "${LOCAL_PORT}:443" -n "$NAMESPACE" > /dev/null 2>&1 &
+        PF_PID=$!
+
+        trap "kill $PF_PID; rm '$TEMP_KUBECONFIG'" EXIT
+
+        k9s --kubeconfig "$TEMP_KUBECONFIG" --splashless --logoless
